@@ -1,5 +1,17 @@
-TABLE_SIZE = 5
+# ----------------------------- import modules ----------------------------------
 
+import os
+import json
+import base64 # base 64 str encoding for json file format
+from cryptography.fernet import Fernet
+
+# ----------------------------- variables --------------------------------------
+
+KEY_FILE = "filekey.key"  # for en/decryption
+TABLE_SIZE = 11
+TABLE_NAME = 'data_table'
+
+# test variables 
 input_name = "Test service"
 input_name_2 = "openweathermap"
 input_name_3 = "anothertest"
@@ -10,13 +22,70 @@ input_value_2 = "456545232"
 input_value_3 = "999"
 input_value_4 = "12348"
 
-# TODO: store credentials in memory or a file
-# TODO: encryt and decryt keys
+input_name_list = [input_name, input_name_2, input_name_3, input_name_4]
+input_value_list = [input_value, input_value_2, input_value_3, input_value_4]
 
-# WIP
+# ----------------------------- utility functions -----------------------------
+
+def load_or_create_key():
+    # for en/decryption
+
+    if os.path.exists(KEY_FILE):
+        # Load existing key
+        with open(KEY_FILE, "rb") as f:
+            key = f.read()
+    else:
+        # Generate new key and save
+        key = Fernet.generate_key()
+        with open(KEY_FILE, "wb") as f:
+            f.write(key)
+    return key
+
+
+def encrypt(to_encrypt:str) -> str:
+    # str must be encoded into bytes with encode()
+    encrypted = fernet.encrypt(to_encrypt.encode())
+    # Convert to base64 string for JSON
+    return base64.b64encode(encrypted).decode("utf-8")
+
+
+def decrypt(to_decrypt:str) -> str:
+    encrypted_bytes = base64.b64decode(to_decrypt.encode("utf-8"))
+    decrypted_bytes = fernet.decrypt(encrypted_bytes) # bytes
+    # decode to return a str
+    return decrypted_bytes.decode("utf-8") 
+
 
 def create_hash_table(size=TABLE_SIZE):
+    print(f"\n+++ Creating new data table with size {TABLE_SIZE} +++")
     return [[] for _ in range(size)]
+
+
+def load_table(filename=f"{TABLE_NAME}.json", size=TABLE_SIZE):
+    # If file does not exist: create a new empty table
+    if not os.path.exists(filename):
+        return create_hash_table(size)
+
+    try:
+        with open(filename, "r") as f:
+            data = json.load(f)
+
+        # Validate: must be a list of lists
+        if isinstance(data, list) and len(data) == size:
+            print("\n+++ Loading data table from json +++")
+            return data
+        else:
+            # File is invalid or wrong size:reset
+            return create_hash_table(size)
+
+    except (json.JSONDecodeError, IOError):
+        # File unreadable or corrupted: reset
+        return create_hash_table(size)
+
+
+def save_table(table,filename=f"{TABLE_NAME}.json"):
+    with open(filename, "w") as f:
+        json.dump(table, f)
 
 
 def get_hash_index(key: str, table_size=TABLE_SIZE) -> int:
@@ -37,52 +106,89 @@ def transform_key(key:str) -> int:
     return sum(ascii_values)
 
 
-def table_insert(hash_table, key, value):
+def table_insert(table, key, value, verbose=1):
 
-    # calculate hash table index using key
+    # Calculate hash table index using key
+    index = get_hash_index(key, len(table))
+    
+    # Encrypt value
+    encypted_value = encrypt(value)
+
+    # Check if key already exists, update it
+    for i, (k, _) in enumerate(table[index]):
+        if k == key:
+            table[index][i] = (key, encypted_value)
+            return
+    # Otherwise, append to the list  
+    table[index].append((key, encypted_value))
+    
+    if verbose:
+        print(f"\nInserting ({key}, {encypted_value}) at index {index}")
+        # collision handling by chaining (add entries to list)
+        if not table[index]:
+            print("Free position!")
+        else:
+            nr_entries = len(table[index])
+            print(f"There are {nr_entries} entries at this position.")
+     
+
+def table_lookup(hash_table, key):
+
+    # Calculate hash table index using key
     index = get_hash_index(key, len(hash_table))
-    print(f"\nInserting ({key}, {value}) at index {index}")
+    # print(f"Searching for key {key} at index {index}")
 
-    # collision handling by chaining (add entries to list)
-    if not hash_table[index]:
-        print("free position!")
-    else:
-        nr_entries = len(hash_table[index])
-        print(f"There are {nr_entries} entries at this position.")
-        
-    # append the new entry to the list    
-    hash_table[index].append([key, value])
-
-
-def table_retrieve(hash_table, key):
-
-    # calculate hash table index using key
-    index = get_hash_index(key, len(hash_table))
-    print(f"Searching for key {key} at index {index}")
-
-    # looking trough each entry at the index (chaining)
+    # Looking trough each entry at the index (chaining)
     for entry in hash_table[index]:
 
         if entry[0] == key:
-            print(f"Found value: {entry[0]}")
-            return entry[1]
+            print(f"+++ Found: {entry[0]} +++")
+            # Decrypt value
+            decrypted_value = decrypt(entry[1])
+            return decrypted_value
         
-    print("Key not found")
+    print("+++ Not found ++++")
     return None
+
+
+def input_handling():
+    # itneractive input mode
+    while True:
+        # Ask for input until the user types 'q'
+        ask_job = input("\n+++ What do you want to do? +++" \
+        "\n    - Type 's' to save a new key." \
+        "\n    - Type 'l' lookup a key." \
+        "\n    - Type 'q' to quit. ").lower().strip()
         
+        if ask_job == 'q' or ask_job =='quit':
+            print('+++ Closing the program +++')
+            return
+            
+        if ask_job == 's':
+            new_key_name = input("\n    For which service do you want to save a new key: ").strip()
+            new_key_value = input("\n    What is the new API key: ").strip()
+            table_insert(data_table, new_key_name, new_key_value)
+            save_table(data_table)
 
-# ------------ testing code --------------------------
+        elif ask_job == 'l':
+            load_key_value = input("    \nFor which service do you want to get the key: ").strip()
+            api_key = table_lookup(data_table, load_key_value)
+            print(f"The key for {load_key_value} is:\n{api_key}")
+        else:
+            print("   - No valid command.") 
 
-# create new table
-new_table = create_hash_table()
+# ----------------------------- main program ---------------------------------- 
 
-# save values
-input_name_list = [input_name, input_name_2, input_name_3, input_name_4]
-input_value_list = [input_value, input_value_2, input_value_3, input_value_4]
-for i in range(len(input_name_list)):
-    table_insert(new_table, input_name_list[i], input_value_list[i])
-print(new_table)
+if __name__ == "__main__":
+    
+    print("+++ Welcome to your API secrets manager. +++")
+    # check for key 
+    CRYPTO_KEY = load_or_create_key()
+    # create Fernet class instance with the encryption key
+    fernet = Fernet(CRYPTO_KEY)
+    # load or create table
+    data_table = load_table()
+    # Ask for action
+    input_handling()
+    
 
-# retrieve value
-get_value = table_retrieve(new_table, input_name_3)
-print(f"Retrieving value: {get_value}")
