@@ -106,7 +106,7 @@ def transform_key(key:str) -> int:
     return sum(ascii_values)
 
 
-def table_insert(table, key, value, verbose=1):
+def table_insert(table, key, value, verbose=0):
 
     # Calculate hash table index using key
     index = get_hash_index(key, len(table))
@@ -121,9 +121,10 @@ def table_insert(table, key, value, verbose=1):
             return
     # Otherwise, append to the list  
     table[index].append((key, encypted_value))
+    print(f"Saved {key}")
     
     if verbose:
-        print(f"\nInserting ({key}, {encypted_value}) at index {index}")
+        #print(f"\nInserting ({key}, {encypted_value}) at index {index}")
         # collision handling by chaining (add entries to list)
         if not table[index]:
             print("Free position!")
@@ -142,12 +143,11 @@ def table_lookup(hash_table, key):
     for entry in hash_table[index]:
 
         if entry[0] == key:
-            print(f"+++ Found: {entry[0]} +++")
+            # print(f"+++ Found: {entry[0]} +++")
             # Decrypt value
             decrypted_value = decrypt(entry[1])
             return decrypted_value
         
-    print("+++ Not found ++++")
     return None
 
 
@@ -173,7 +173,10 @@ def input_handling():
         elif ask_job == 'l':
             load_key_value = input("    \nFor which service do you want to get the key: ").strip()
             api_key = table_lookup(data_table, load_key_value)
-            print(f"The key for {load_key_value} is:\n{api_key}")
+            if api_key:
+                print(f"The key for {load_key_value} is:\n{api_key}")
+            else:
+                print(f"Could not find {load_key_value} in the table.")
         else:
             print("   - No valid command.") 
 
