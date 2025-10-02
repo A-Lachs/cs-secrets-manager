@@ -48,7 +48,6 @@ Run the program with `python secrets_manager.py` from the command line, an inter
 2. Security Improvements
     - key protection: The encryption key is stored in filekey.key alongside the JSON. 
         -   Prefer an OS keyring (Windows DPAPI, macOS Keychain, GNOME Keyring) or derive the Fernet key from a master passphrase via a KDF (PBKDF2/Argon2) and do not store the raw key file.
-        -   Add filekey.key and data_table.json to .gitignore to avoid accidental commits
     - Use `getpass` to mask API key input so it isn’t echoed to the terminal.
         - Replace input() for API keys with getpass.getpass()
     - Ensure file permissions are restrictive (e.g., 600)
